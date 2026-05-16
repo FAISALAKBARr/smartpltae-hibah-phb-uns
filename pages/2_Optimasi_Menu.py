@@ -48,43 +48,44 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
 .section-title {
     font-family: 'DM Serif Display', serif;
-    font-size: 1.2rem; color: #3a3aaa; margin: 1.2rem 0 0.6rem;
-    padding-bottom: 6px; border-bottom: 2px solid #a0a0e0;
+    font-size: 1.2rem; color: #7070dd; margin: 1.2rem 0 0.6rem;
+    padding-bottom: 6px; border-bottom: 2px solid rgba(112,112,220,0.4);
 }
 .result-card {
-    background: white; border: 1.5px solid #e0e0f0;
+    background: rgba(255,255,255,0.04); border: 1.5px solid rgba(128,128,200,0.2);
     border-radius: 14px; padding: 18px 20px; margin: 0.6rem 0;
-    box-shadow: 0 2px 12px rgba(0,0,80,0.07);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 .winner-badge {
-    display: inline-block; background: #2d7a1b; color: white;
+    display: inline-block; background: rgba(45,122,27,0.8); color: white;
     border-radius: 20px; padding: 3px 14px; font-size: 0.8rem; font-weight: 600;
 }
 .loser-badge {
-    display: inline-block; background: #888; color: white;
+    display: inline-block; background: rgba(100,100,100,0.6); color: white;
     border-radius: 20px; padding: 3px 14px; font-size: 0.8rem; font-weight: 600;
 }
-.constraint-ok   { color: #27ae60; font-weight: 600; }
-.constraint-fail { color: #e53935; font-weight: 600; }
 .info-box {
-    background: #f0f0fa; border: 1.5px solid #c0c0ee;
-    border-left: 4px solid #4040a0; border-radius: 10px;
-    padding: 12px 16px; font-size: 0.83rem; color: #2a2a5a; margin: 0.6rem 0;
+    background: rgba(64,64,160,0.1); border: 1.5px solid rgba(100,100,200,0.25);
+    border-left: 4px solid #5555bb; border-radius: 10px;
+    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0;
+    opacity: 0.9;
 }
 .warn-box {
-    background: #fff8e1; border: 1.5px solid #ffcc02;
-    border-left: 4px solid #f59e0b; border-radius: 10px;
-    padding: 12px 16px; font-size: 0.83rem; color: #5a3e00; margin: 0.6rem 0;
+    background: rgba(245,195,50,0.1); border: 1.5px solid rgba(245,195,50,0.28);
+    border-left: 4px solid #d4a017; border-radius: 10px;
+    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0;
+    opacity: 0.9;
 }
 .sidebar-label {
-    font-size: 0.75rem; color: #888; text-transform: uppercase;
+    font-size: 0.75rem; color: inherit; opacity: 0.55; text-transform: uppercase;
     letter-spacing: 0.6px; font-weight: 600; margin-bottom: 4px;
 }
 .sp-footer {
     text-align: center; padding: 1.5rem; margin-top: 2rem;
-    border-top: 1px solid #e8e8e8; color: #aaa; font-size: 0.78rem; line-height: 1.8;
+    border-top: 1px solid rgba(128,128,128,0.2); color: inherit;
+    opacity: 0.55; font-size: 0.78rem; line-height: 1.8;
 }
-.sp-footer strong { color: #555; }
+.sp-footer strong { opacity: 1; }
 
 @media (prefers-color-scheme: dark) {
     .section-title { color: #9090ff; border-bottom-color: #5050aa; }

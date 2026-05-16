@@ -35,51 +35,51 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
 .project-card {
     border-radius: 16px; padding: 28px 24px; height: 100%;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.10);
-    border: 1.5px solid rgba(0,0,0,0.06);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     transition: transform 0.2s;
 }
 .project-card:hover { transform: translateY(-3px); }
-.year1 { background: linear-gradient(135deg, #f0f9f0 0%, #e0f4e0 100%); border-color: #b8ddb8; }
-.year2 { background: linear-gradient(135deg, #f0f0f9 0%, #e0e0f8 100%); border-color: #b8b8e8; }
+.year1 { background: rgba(45,122,27,0.09); border: 2px solid rgba(45,122,27,0.35); }
+.year2 { background: rgba(64,64,160,0.09); border: 2px solid rgba(64,64,160,0.35); }
 .card-year { font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px;
              text-transform: uppercase; margin-bottom: 8px; }
-.year1 .card-year { color: #2d7a1b; }
-.year2 .card-year { color: #3a3aa0; }
+.year1 .card-year { color: #5aaa3a; }
+.year2 .card-year { color: #7070cc; }
 .card-icon { font-size: 2.6rem; margin-bottom: 10px; }
 .card-title {
     font-family: 'DM Serif Display', serif; font-size: 1.5rem;
-    margin: 0 0 6px; color: #1a1a1a;
+    margin: 0 0 6px; color: inherit;
 }
-.card-sub { font-size: 0.84rem; color: #555; margin-bottom: 14px; }
+.card-sub { font-size: 0.84rem; color: inherit; opacity: 0.7; margin-bottom: 14px; }
 .feature-list { list-style: none; padding: 0; margin: 0; }
-.feature-list li { font-size: 0.82rem; color: #444; padding: 4px 0;
+.feature-list li { font-size: 0.82rem; color: inherit; opacity: 0.82; padding: 4px 0;
                    display: flex; align-items: flex-start; gap: 6px; }
 .card-nav {
     margin-top: 18px; display: inline-block;
     padding: 8px 18px; border-radius: 8px; font-size: 0.84rem; font-weight: 600;
 }
-.year1 .card-nav { background: #2d7a1b; color: white; }
-.year2 .card-nav { background: #3a3aa0; color: white; }
+.year1 .card-nav { background: rgba(45,122,27,0.85); color: white; }
+.year2 .card-nav { background: rgba(64,64,160,0.85); color: white; }
 
 .flow-banner {
-    background: linear-gradient(90deg, #e8f5e8 0%, #f0f0fa 100%);
-    border: 1.5px solid #d0d8f0; border-radius: 14px;
+    background: rgba(128,128,200,0.07);
+    border: 1.5px solid rgba(128,128,200,0.2); border-radius: 14px;
     padding: 18px 24px; margin: 1.5rem 0;
     display: flex; align-items: center; justify-content: center;
     gap: 16px; flex-wrap: wrap;
 }
 .flow-step {
-    text-align: center; font-size: 0.82rem; color: #333;
+    text-align: center; font-size: 0.82rem; color: inherit; opacity: 0.85;
 }
 .flow-step .step-icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
-.flow-arrow { font-size: 1.4rem; color: #aaa; }
+.flow-arrow { font-size: 1.4rem; color: inherit; opacity: 0.35; }
 
 .sp-footer {
     text-align: center; padding: 1.5rem; margin-top: 2rem;
-    border-top: 1px solid #e8e8e8; color: #aaa; font-size: 0.78rem; line-height: 1.8;
+    border-top: 1px solid rgba(128,128,128,0.2); color: inherit;
+    opacity: 0.55; font-size: 0.78rem; line-height: 1.8;
 }
-.sp-footer strong { color: #555; }
+.sp-footer strong { opacity: 1; }
 </style>
 """, unsafe_allow_html=True)
 
