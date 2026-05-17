@@ -1,7 +1,11 @@
 """
 SmartPlate — Year 2: Optimasi Menu Makanan
-Genetic Algorithm vs Particle Swarm Optimization
-Semua logika kalkulasi TIDAK diubah dari versi original.
+Hybrid GA-PSO:
+  Phase 1 — GA  : Optimasi KOMBINASI makanan (ruang diskret/kombinatorial)
+  Phase 2 — PSO : Optimasi PORSI/JUMLAH untuk kombinasi terpilih (ruang kontinu)
+
+Standalone GA & PSO dipertahankan sebagai pembanding.
+Semua fungsi kalkulasi gizi TIDAK diubah dari versi original.
 """
 
 import streamlit as st
@@ -12,7 +16,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy import stats
 import time
-from datetime import datetime
 from typing import Dict
 
 st.set_page_config(
@@ -23,7 +26,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# CSS — konsisten dengan SmartPlate (Year 1)
+# CSS — konsisten dengan SmartPlate Year 1 + elemen Hybrid baru
 # ==============================================================================
 st.markdown("""
 <style>
@@ -35,7 +38,7 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 .sp-header {
     display: flex; align-items: center; gap: 14px;
     padding: 1.6rem 2rem 1.2rem;
-    background: linear-gradient(135deg, #1a1a3e 0%, #2d2d7a 60%, #4040a0 100%);
+    background: linear-gradient(135deg, #1a1a3e 0%, #2d2d7a 40%, #1a3a1a 80%, #2d5a1b 100%);
     border-radius: 16px; margin-bottom: 1.8rem;
     box-shadow: 0 8px 32px rgba(45,45,120,0.28);
 }
@@ -44,7 +47,7 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     font-family: 'DM Serif Display', serif;
     color: #f0f0ff; margin: 0; font-size: 2rem; letter-spacing: -0.5px;
 }
-.sp-header-text p { color: #a8a8ff; margin: 0; font-size: 0.88rem; font-weight: 500; letter-spacing: 0.5px; }
+.sp-header-text p { color: #b0b0ff; margin: 0; font-size: 0.88rem; font-weight: 500; letter-spacing: 0.5px; }
 
 .section-title {
     font-family: 'DM Serif Display', serif;
@@ -64,17 +67,38 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     display: inline-block; background: rgba(100,100,100,0.6); color: white;
     border-radius: 20px; padding: 3px 14px; font-size: 0.8rem; font-weight: 600;
 }
+/* ── Hybrid badge & phase cards ─────────────────────────────────────────── */
+.hybrid-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, rgba(45,45,160,0.85) 0%, rgba(45,122,27,0.85) 100%);
+    color: white; border-radius: 20px; padding: 3px 14px;
+    font-size: 0.8rem; font-weight: 600;
+}
+.phase-ga {
+    background: rgba(63,63,160,0.09); border-left: 4px solid #5555bb;
+    border-radius: 10px; padding: 10px 14px; margin: 8px 0;
+}
+.phase-pso {
+    background: rgba(45,122,27,0.09); border-left: 4px solid #2d7a1b;
+    border-radius: 10px; padding: 10px 14px; margin: 8px 0;
+}
+.phase-label {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 4px; display: block;
+}
+.phase-ga .phase-label  { color: #7070dd; }
+.phase-pso .phase-label { color: #3d8f28; }
+.phase-desc { font-size: 0.82rem; color: inherit; opacity: 0.85; }
+
 .info-box {
     background: rgba(64,64,160,0.1); border: 1.5px solid rgba(100,100,200,0.25);
     border-left: 4px solid #5555bb; border-radius: 10px;
-    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0;
-    opacity: 0.9;
+    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0; opacity: 0.9;
 }
 .warn-box {
     background: rgba(245,195,50,0.1); border: 1.5px solid rgba(245,195,50,0.28);
     border-left: 4px solid #d4a017; border-radius: 10px;
-    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0;
-    opacity: 0.9;
+    padding: 12px 16px; font-size: 0.83rem; color: inherit; margin: 0.6rem 0; opacity: 0.9;
 }
 .sidebar-label {
     font-size: 0.75rem; color: inherit; opacity: 0.55; text-transform: uppercase;
@@ -92,20 +116,22 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     .result-card { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
     .info-box { background: rgba(64,64,160,0.15); border-color: rgba(100,100,200,0.3); color: #c0c0ff; }
     .warn-box { background: rgba(245,195,50,0.1); border-color: rgba(245,195,50,0.3); color: #e0c060; }
+    .phase-ga  { background: rgba(63,63,160,0.15); }
+    .phase-pso { background: rgba(45,122,27,0.15); }
 }
 
 div[data-testid="stExpander"] { border: 1.5px solid #c0c0ee !important; border-radius: 10px !important; }
 .stButton > button {
-    background: linear-gradient(135deg, #2d2d7a 0%, #4040a0 100%) !important;
+    background: linear-gradient(135deg, #2d2d7a 0%, #2d5a1b 100%) !important;
     color: white !important; border: none !important; border-radius: 10px !important;
     font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important;
     font-size: 0.95rem !important; padding: 0.55rem 0 !important;
-    box-shadow: 0 4px 14px rgba(45,45,120,0.3) !important;
-    transition: all 0.2s !important;
+    box-shadow: 0 4px 14px rgba(45,45,120,0.3) !important; transition: all 0.2s !important;
 }
 .stButton > button:hover { transform: translateY(-1px) !important; }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ==============================================================================
 # ▼▼▼  KODE KALKULASI ORIGINAL — TIDAK DIUBAH  ▼▼▼
@@ -161,16 +187,16 @@ FOOD_DATABASE = {
         {'nama': 'Labu Siam', 'kalori': 19, 'protein': 0.8, 'karbo': 4.5, 'harga': 7000},
     ],
     'minuman': [
-        {'nama': 'Susu Sapi',   'kalori': 61,  'protein': 3.2, 'karbo': 4.8, 'harga': 20000},
-        {'nama': 'Teh Manis',   'kalori': 30,  'protein': 0,   'karbo': 8,   'harga': 10000},
-        {'nama': 'Jus Jeruk',   'kalori': 45,  'protein': 0.7, 'karbo': 10,  'harga': 8000},
-        {'nama': 'Air Kelapa',  'kalori': 19,  'protein': 0.7, 'karbo': 3.7, 'harga': 7000},
-        {'nama': 'Susu Kedelai','kalori': 54,  'protein': 3.3, 'karbo': 6,   'harga': 12000},
-        {'nama': 'Yogurt',      'kalori': 59,  'protein': 3.5, 'karbo': 4.7, 'harga': 25000},
-        {'nama': 'Kopi Susu',   'kalori': 38,  'protein': 2,   'karbo': 5,   'harga': 8000},
-        {'nama': 'Jus Alpukat', 'kalori': 160, 'protein': 2,   'karbo': 8.5, 'harga': 15000},
-        {'nama': 'Air Putih',   'kalori': 0,   'protein': 0,   'karbo': 0,   'harga': 4000},
-        {'nama': 'Jus Tomat',   'kalori': 17,  'protein': 0.8, 'karbo': 3.9, 'harga': 10000},
+        {'nama': 'Susu Sapi',    'kalori': 61,  'protein': 3.2, 'karbo': 4.8, 'harga': 20000},
+        {'nama': 'Teh Manis',    'kalori': 30,  'protein': 0,   'karbo': 8,   'harga': 10000},
+        {'nama': 'Jus Jeruk',    'kalori': 45,  'protein': 0.7, 'karbo': 10,  'harga': 8000},
+        {'nama': 'Air Kelapa',   'kalori': 19,  'protein': 0.7, 'karbo': 3.7, 'harga': 7000},
+        {'nama': 'Susu Kedelai', 'kalori': 54,  'protein': 3.3, 'karbo': 6,   'harga': 12000},
+        {'nama': 'Yogurt',       'kalori': 59,  'protein': 3.5, 'karbo': 4.7, 'harga': 25000},
+        {'nama': 'Kopi Susu',    'kalori': 38,  'protein': 2,   'karbo': 5,   'harga': 8000},
+        {'nama': 'Jus Alpukat',  'kalori': 160, 'protein': 2,   'karbo': 8.5, 'harga': 15000},
+        {'nama': 'Air Putih',    'kalori': 0,   'protein': 0,   'karbo': 0,   'harga': 4000},
+        {'nama': 'Jus Tomat',    'kalori': 17,  'protein': 0.8, 'karbo': 3.9, 'harga': 10000},
     ],
 }
 
@@ -190,13 +216,14 @@ TARGETS = {
     'protein': {'min': 50,   'max': 80,   'ideal': 60},
     'karbo':   {'min': 250,  'max': 350,  'ideal': 300},
 }
-CATEGORY_MIN_PORTIONS = {'buah': 150, 'karbohidrat': 300, 'protein': 150, 'sayur': 200, 'minuman': 600}
-CATEGORY_MAX_PORTIONS = {'buah': 400, 'karbohidrat': 500, 'protein': 300, 'sayur': 500, 'minuman': 900}
+CATEGORY_MIN_PORTIONS  = {'buah': 150, 'karbohidrat': 300, 'protein': 150, 'sayur': 200, 'minuman': 600}
+CATEGORY_MAX_PORTIONS  = {'buah': 400, 'karbohidrat': 500, 'protein': 300, 'sayur': 500, 'minuman': 900}
 MAX_BUDGET             = 50000
 MIN_PORTION_PER_FOOD   = 50
 MAX_ITEMS_PER_CATEGORY = {'buah': 3, 'karbohidrat': 2, 'protein': 3, 'sayur': 4, 'minuman': 2}
 STAPLE_FOOD_INDICES    = [10, 11]
 MIN_STAPLE_PORTION     = 200
+
 
 # ── Calculation functions (unchanged) ─────────────────────────────────────────
 
@@ -227,15 +254,13 @@ def calculate_penalty(portions: np.ndarray, nutrition: Dict) -> float:
     if nutrition['cost'] > MAX_BUDGET:
         penalty += (nutrition['cost'] - MAX_BUDGET) ** 2 * 0.01
     for category, min_p in CATEGORY_MIN_PORTIONS.items():
-        s = CATEGORY_START[category]
-        e = s + len(FOOD_DATABASE[category])
+        s = CATEGORY_START[category]; e = s + len(FOOD_DATABASE[category])
         tot = np.sum(portions[s:e])
         if tot < min_p:
             w = 2.0 if category == 'minuman' else 0.8
             penalty += (min_p - tot) ** 2 * w
     for category, max_p in CATEGORY_MAX_PORTIONS.items():
-        s = CATEGORY_START[category]
-        e = s + len(FOOD_DATABASE[category])
+        s = CATEGORY_START[category]; e = s + len(FOOD_DATABASE[category])
         tot = np.sum(portions[s:e])
         if tot > max_p:
             w = 2.0 if category == 'minuman' else 0.5
@@ -244,8 +269,7 @@ def calculate_penalty(portions: np.ndarray, nutrition: Dict) -> float:
         if 0 < portion < MIN_PORTION_PER_FOOD:
             penalty += (MIN_PORTION_PER_FOOD - portion) ** 2 * 0.1
     for category, max_items in MAX_ITEMS_PER_CATEGORY.items():
-        s = CATEGORY_START[category]
-        e = s + len(FOOD_DATABASE[category])
+        s = CATEGORY_START[category]; e = s + len(FOOD_DATABASE[category])
         n = np.sum(portions[s:e] >= MIN_PORTION_PER_FOOD)
         if n > max_items:
             penalty += (n - max_items) ** 2 * 10
@@ -374,6 +398,10 @@ def aggressive_repair_solution(individual: np.ndarray, max_iterations: int = 5) 
     return repaired
 
 
+# ==============================================================================
+# GENETIC ALGORITHM (unchanged from original)
+# ==============================================================================
+
 class GeneticAlgorithm:
     def __init__(self, pop_size=30, generations=50, pc=0.8, pm=0.2):
         self.pop_size = pop_size; self.generations = generations
@@ -472,6 +500,10 @@ class GeneticAlgorithm:
         }
 
 
+# ==============================================================================
+# PARTICLE SWARM OPTIMIZATION (unchanged from original)
+# ==============================================================================
+
 class ParticleSwarmOptimization:
     def __init__(self, n_particles=30, iterations=50, w=0.7, c1=1.5, c2=1.5):
         self.n_particles = n_particles; self.iterations = iterations
@@ -529,63 +561,246 @@ class ParticleSwarmOptimization:
             'validation':   validate_final_solution(gbest_pos),
         }
 
+
 # ==============================================================================
 # ▲▲▲  AKHIR KODE KALKULASI ORIGINAL  ▲▲▲
 # ==============================================================================
 
 
 # ==============================================================================
-# STREAMLIT DISPLAY FUNCTIONS — BARU
+# ▼▼▼  HYBRID GA-PSO — BARU  ▼▼▼
 # ==============================================================================
 
-CATEGORY_EMOJI = {
-    'buah': '🍎', 'karbohidrat': '🍚', 'protein': '🍗', 'sayur': '🥗', 'minuman': '🥤'
-}
-CATEGORY_COLOR = {
-    'buah': '#E8544A', 'karbohidrat': '#F5A623',
-    'protein': '#C0392B', 'sayur': '#27AE60', 'minuman': '#4A90D9'
-}
+def _hybrid_repair_fast(sol: np.ndarray) -> np.ndarray:
+    """
+    Lightweight repair untuk iterasi PSO pada Hybrid.
+    Hanya menangani constraint kritis (minuman, staple food, minimum portion).
+    Constraint kombinasi per-kategori TIDAK dicek di sini karena sudah
+    dikunci oleh GA pada Phase 1.
+    """
+    r = sol.copy()
+    # Zero-kan porsi di bawah minimum
+    r[r < MIN_PORTION_PER_FOOD] = 0
+    # Pastikan staple food cukup
+    staple = sum(r[i] for i in STAPLE_FOOD_INDICES)
+    if staple < MIN_STAPLE_PORTION:
+        r[10] += MIN_STAPLE_PORTION - staple
+    # Pastikan minuman dalam rentang 600–900 ml
+    ms = CATEGORY_START['minuman']; me = ms + len(FOOD_DATABASE['minuman'])
+    mt = np.sum(r[ms:me])
+    if mt < 600:
+        r[ms + 8] += 600 - mt
+    elif mt > 900:
+        excess = mt - 900
+        for i in sorted(range(ms, me), key=lambda x: -r[x]):
+            if excess <= 0: break
+            red = min(max(r[i] - MIN_PORTION_PER_FOOD, 0), excess)
+            if red > 0: r[i] -= red; excess -= red
+    return r
+
+
+class HybridGAPSO:
+    """
+    Hybrid GA-PSO dengan pemisahan objective yang jelas:
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  PHASE 1 — Genetic Algorithm: Optimasi KOMBINASI Makanan        │
+    │    • GA mengeksplorasi ruang kombinatorial (makanan apa saja    │
+    │      yang dipilih, per kategori).                               │
+    │    • Kromosom = vektor porsi; aktif/tidaknya item (≥50g / 0g)  │
+    │      merepresentasikan keputusan kombinasi.                     │
+    │    • Output: best chromosome → food combination (selected mask) │
+    ├─────────────────────────────────────────────────────────────────┤
+    │  PHASE 2 — Particle Swarm Optimization: Optimasi PORSI/JUMLAH  │
+    │    • PSO menerima kombinasi makanan terpilih dari GA.           │
+    │    • Hanya mengoptimasi jumlah/porsi (nilai kontinu) pada item  │
+    │      yang sudah dipilih GA — ruang pencarian jauh lebih kecil.  │
+    │    • Inertia menurun linear (w_start → 0.4) untuk konvergensi  │
+    │      yang lebih presisi.                                        │
+    │    • Particle pertama di-seed dari solusi GA sebagai warm-start.│
+    └─────────────────────────────────────────────────────────────────┘
+    """
+
+    def __init__(self,
+                 ga_pop_size: int = 30,   ga_generations: int = 25,
+                 ga_pc: float = 0.8,      ga_pm: float = 0.2,
+                 pso_particles: int = 30, pso_iterations: int = 25,
+                 pso_w: float = 0.7,      pso_c1: float = 1.5, pso_c2: float = 1.5):
+        self.ga_pop_size    = ga_pop_size
+        self.ga_generations = ga_generations
+        self.ga_pc          = ga_pc
+        self.ga_pm          = ga_pm
+        self.pso_particles  = pso_particles
+        self.pso_iterations = pso_iterations
+        self.pso_w          = pso_w
+        self.pso_c1         = pso_c1
+        self.pso_c2         = pso_c2
+        # History per-phase
+        self.ga_best_history:  list = []
+        self.ga_avg_history:   list = []
+        self.pso_best_history: list = []
+        self.pso_avg_history:  list = []
+
+    # ------------------------------------------------------------------
+    def run(self, verbose: bool = False):
+        start_time = time.time()
+
+        # ══════════════════════════════════════════════════════════════
+        # PHASE 1 — GA: Mencari Kombinasi Makanan Terbaik
+        # ══════════════════════════════════════════════════════════════
+        ga = GeneticAlgorithm(
+            pop_size=self.ga_pop_size, generations=self.ga_generations,
+            pc=self.ga_pc, pm=self.ga_pm
+        )
+        ga_solution, ga_fitness, ga_history = ga.evolve(verbose=verbose)
+        self.ga_best_history = ga_history['best_history']
+        self.ga_avg_history  = ga_history['avg_history']
+
+        # Ekstrak "kombinasi" terpilih dari solusi GA terbaik
+        # Food item dianggap terpilih jika porsinya ≥ MIN_PORTION_PER_FOOD
+        selected_mask    = ga_solution >= MIN_PORTION_PER_FOOD
+        selected_indices = np.where(selected_mask)[0]
+        n_selected       = len(selected_indices)
+
+        # Edge case: tidak ada makanan aktif (seharusnya tidak terjadi setelah repair)
+        if n_selected == 0:
+            best_sol = aggressive_repair_solution(ga_solution)
+            bf       = fitness_function(best_sol)
+            self.pso_best_history = [bf] * self.pso_iterations
+            self.pso_avg_history  = [bf] * self.pso_iterations
+            return best_sol, bf, self._build_history(start_time, best_sol, selected_indices)
+
+        # ══════════════════════════════════════════════════════════════
+        # PHASE 2 — PSO: Mengoptimasi Porsi pada Kombinasi Terpilih
+        # Dimensi pencarian PSO = n_selected (bukan NUM_FOODS penuh),
+        # sehingga jauh lebih efisien dan presisi.
+        # ══════════════════════════════════════════════════════════════
+        ga_portions = ga_solution[selected_indices]          # (n_selected,)
+
+        # Batas bawah & atas porsi per item (berdasarkan kategori)
+        lo_bounds = np.full(n_selected, float(MIN_PORTION_PER_FOOD))
+        hi_bounds = np.array([
+            float(CATEGORY_MAX_PORTIONS.get(ALL_FOODS[i]['category'], 500))
+            for i in selected_indices
+        ])
+
+        # ── Inisialisasi Particle ──────────────────────────────────────
+        positions  = np.zeros((self.pso_particles, n_selected))
+        velocities = np.random.uniform(-40, 40, (self.pso_particles, n_selected))
+        # Particle ke-0: warm-start dari solusi GA (memastikan setidaknya satu solusi baik)
+        positions[0] = np.clip(ga_portions, lo_bounds, hi_bounds)
+        # Particle lain: perturbasi Gaussian di sekitar solusi GA
+        for p in range(1, self.pso_particles):
+            noise      = np.random.normal(0, ga_portions * 0.25)
+            positions[p] = np.clip(ga_portions + noise, lo_bounds, hi_bounds)
+
+        # ── Helper: rekonstruksi solusi penuh dari vektor porsi tereduksi ──
+        def _make_full(reduced: np.ndarray) -> np.ndarray:
+            sol = np.zeros(NUM_FOODS)
+            sol[selected_indices] = np.clip(reduced, lo_bounds, hi_bounds)
+            return _hybrid_repair_fast(sol)
+
+        def _pso_fit(reduced: np.ndarray) -> float:
+            return fitness_function(_make_full(reduced))
+
+        # ── Inisialisasi personal best & global best ───────────────────
+        pbest_pos = positions.copy()
+        pbest_fit = np.array([_pso_fit(p) for p in positions])
+        gi        = np.argmax(pbest_fit)
+        gbest_pos = pbest_pos[gi].copy()
+        gbest_fit = float(pbest_fit[gi])
+
+        self.pso_best_history = []
+        self.pso_avg_history  = []
+
+        # ── Main PSO Loop (inertia menurun linear: w_start → 0.4) ─────
+        w_start = self.pso_w
+        w_end   = 0.4
+
+        for it in range(self.pso_iterations):
+            # Inertia weight decay — eksplorasi di awal, eksploitasi di akhir
+            w_it = w_start - (w_start - w_end) * (it / max(self.pso_iterations - 1, 1))
+
+            for i in range(self.pso_particles):
+                r1 = np.random.rand(n_selected)
+                r2 = np.random.rand(n_selected)
+                velocities[i] = (
+                    w_it * velocities[i]
+                    + self.pso_c1 * r1 * (pbest_pos[i] - positions[i])
+                    + self.pso_c2 * r2 * (gbest_pos   - positions[i])
+                )
+                positions[i] = np.clip(positions[i] + velocities[i], lo_bounds, hi_bounds)
+                fit_i = _pso_fit(positions[i])
+                if fit_i > pbest_fit[i]:
+                    pbest_fit[i] = fit_i
+                    pbest_pos[i] = positions[i].copy()
+                if fit_i > gbest_fit:
+                    gbest_fit = fit_i
+                    gbest_pos = positions[i].copy()
+
+            self.pso_best_history.append(float(gbest_fit))
+            self.pso_avg_history.append(float(np.mean(pbest_fit)))
+
+        # ── Rekonstruksi & aggressive repair solusi akhir ─────────────
+        best_solution = _make_full(gbest_pos)
+        best_solution = aggressive_repair_solution(best_solution, max_iterations=5)
+        final_fitness = fitness_function(best_solution)
+
+        return best_solution, final_fitness, self._build_history(start_time, best_solution, selected_indices)
+
+    def _build_history(self, start_time: float, solution: np.ndarray, selected_indices: np.ndarray) -> Dict:
+        return {
+            'ga_best_history':  self.ga_best_history,
+            'ga_avg_history':   self.ga_avg_history,
+            'pso_best_history': self.pso_best_history,
+            'pso_avg_history':  self.pso_avg_history,
+            'time':             time.time() - start_time,
+            'validation':       validate_final_solution(solution),
+            'n_selected':       int(len(selected_indices)),
+            'ga_generations':   self.ga_generations,
+            'pso_iterations':   self.pso_iterations,
+        }
+
+# ==============================================================================
+# ▲▲▲  AKHIR HYBRID GA-PSO  ▲▲▲
+# ==============================================================================
+
+
+# ==============================================================================
+# DISPLAY HELPERS
+# ==============================================================================
+
+CATEGORY_EMOJI = {'buah':'🍎','karbohidrat':'🍚','protein':'🍗','sayur':'🥗','minuman':'🥤'}
+CATEGORY_COLOR = {'buah':'#E8544A','karbohidrat':'#F5A623','protein':'#C0392B','sayur':'#27AE60','minuman':'#4A90D9'}
 
 
 def _check_target(val, lo, hi=None):
-    if hi is None:
-        return "✅" if val >= lo else "❌"
+    if hi is None: return "✅" if val >= lo else "❌"
     return "✅" if lo <= val <= hi else "❌"
 
 
 def display_menu_st(solution: np.ndarray, label: str = ""):
-    """Streamlit replacement of print_menu_detail()."""
+    """Tampilkan detail menu + metrik nutrisi."""
     nutrition  = calculate_nutrition(solution)
     validation = validate_final_solution(solution)
-
-    # Constraint status
     if validation['all_constraints_met']:
         st.success("✅ Semua constraint terpenuhi")
     else:
         for v in validation['violations']:
             st.warning(f"⚠️ {v}")
-
-    # Nutrition metrics
     c1, c2, c3, c4 = st.columns(4)
     kal_ok = TARGETS['kalori']['min'] <= nutrition['kalori'] <= TARGETS['kalori']['max']
     pro_ok = nutrition['protein'] >= TARGETS['protein']['min']
     kar_ok = TARGETS['karbo']['min'] <= nutrition['karbo'] <= TARGETS['karbo']['max']
     bud_ok = nutrition['cost'] <= MAX_BUDGET
-
     c1.metric("🔥 Kalori",      f"{nutrition['kalori']:.0f} kkal",
-              delta="Sesuai target" if kal_ok else "Di luar target",
-              delta_color="normal" if kal_ok else "inverse")
+              delta="Sesuai" if kal_ok else "Di luar target", delta_color="normal" if kal_ok else "inverse")
     c2.metric("💪 Protein",     f"{nutrition['protein']:.1f} g",
-              delta="≥50g ✓" if pro_ok else "<50g ✗",
-              delta_color="normal" if pro_ok else "inverse")
+              delta="≥50g ✓" if pro_ok else "<50g ✗",  delta_color="normal" if pro_ok else "inverse")
     c3.metric("🌾 Karbohidrat", f"{nutrition['karbo']:.1f} g",
-              delta="Sesuai target" if kar_ok else "Di luar target",
-              delta_color="normal" if kar_ok else "inverse")
+              delta="Sesuai" if kar_ok else "Di luar target", delta_color="normal" if kar_ok else "inverse")
     c4.metric("💰 Biaya",       f"Rp {nutrition['cost']:,.0f}",
-              delta="Dalam budget" if bud_ok else "Melebihi budget",
-              delta_color="normal" if bud_ok else "inverse")
-
-    # Menu table
+              delta="Dalam budget" if bud_ok else "Melebihi budget", delta_color="normal" if bud_ok else "inverse")
     rows = []
     for category, foods in FOOD_DATABASE.items():
         s = CATEGORY_START[category]
@@ -593,11 +808,11 @@ def display_menu_st(solution: np.ndarray, label: str = ""):
             portion = solution[s + i]
             if portion >= MIN_PORTION_PER_FOOD:
                 rows.append({
-                    'Kategori':    f"{CATEGORY_EMOJI[category]} {category.capitalize()}",
-                    'Makanan':     food['nama'],
-                    'Porsi (g/ml)': round(portion, 1),
-                    'Biaya (Rp)':  int(food['harga'] * portion / 1000),
-                    'Kalori (kkal)': round(food['kalori'] * portion / 100, 1),
+                    'Kategori':       f"{CATEGORY_EMOJI[category]} {category.capitalize()}",
+                    'Makanan':        food['nama'],
+                    'Porsi (g/ml)':   round(portion, 1),
+                    'Biaya (Rp)':     int(food['harga'] * portion / 1000),
+                    'Kalori (kkal)':  round(food['kalori'] * portion / 100, 1),
                 })
     if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -605,25 +820,117 @@ def display_menu_st(solution: np.ndarray, label: str = ""):
         st.info("Tidak ada makanan yang dipilih.")
 
 
-def display_convergence_st(ga_hist: Dict, pso_hist: Dict):
-    """Streamlit replacement of plot_convergence_comparison()."""
+def display_three_way_comparison_st(ga_res: Dict, pso_res: Dict, hybrid_res: Dict):
+    """Tabel perbandingan 3 algoritma: GA vs PSO vs Hybrid GA-PSO."""
+    st.markdown('<div class="section-title">📊 Perbandingan GA vs PSO vs Hybrid GA-PSO</div>',
+                unsafe_allow_html=True)
+    ga_n = ga_res['nutrition']; pso_n = pso_res['nutrition']; hyb_n = hybrid_res['nutrition']
+
+    def best3(a, b, c, higher=True):
+        vals = {'GA': a, 'PSO': b, 'Hybrid': c}
+        w = max(vals, key=vals.get) if higher else min(vals, key=vals.get)
+        return f"🏆 {w}"
+
+    rows = [
+        {"Metrik": "Best Fitness",
+         "GA": f"{ga_res['fitness']:.6f}", "PSO": f"{pso_res['fitness']:.6f}",
+         "Hybrid GA-PSO": f"{hybrid_res['fitness']:.6f}",
+         "Terbaik": best3(ga_res['fitness'], pso_res['fitness'], hybrid_res['fitness'], True)},
+        {"Metrik": "Biaya Total (Rp)",
+         "GA": f"{ga_n['cost']:,.0f}", "PSO": f"{pso_n['cost']:,.0f}",
+         "Hybrid GA-PSO": f"{hyb_n['cost']:,.0f}",
+         "Terbaik": best3(ga_n['cost'], pso_n['cost'], hyb_n['cost'], False)},
+        {"Metrik": "Waktu Komputasi (s)",
+         "GA": f"{ga_res['time']:.2f}", "PSO": f"{pso_res['time']:.2f}",
+         "Hybrid GA-PSO": f"{hybrid_res['time']:.2f}",
+         "Terbaik": best3(ga_res['time'], pso_res['time'], hybrid_res['time'], False)},
+        {"Metrik": "Kalori (kkal)",
+         "GA": f"{ga_n['kalori']:.1f}", "PSO": f"{pso_n['kalori']:.1f}",
+         "Hybrid GA-PSO": f"{hyb_n['kalori']:.1f}", "Terbaik": "—"},
+        {"Metrik": "Protein (g)",
+         "GA": f"{ga_n['protein']:.1f}", "PSO": f"{pso_n['protein']:.1f}",
+         "Hybrid GA-PSO": f"{hyb_n['protein']:.1f}", "Terbaik": "—"},
+        {"Metrik": "Karbohidrat (g)",
+         "GA": f"{ga_n['karbo']:.1f}", "PSO": f"{pso_n['karbo']:.1f}",
+         "Hybrid GA-PSO": f"{hyb_n['karbo']:.1f}", "Terbaik": "—"},
+    ]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def display_convergence_all_st(ga_hist: Dict, pso_hist: Dict, hybrid_hist: Dict):
+    """
+    Kurva konvergensi 3-way:
+    Kiri  — GA vs PSO vs Hybrid (gabungan, untuk perbandingan langsung)
+    Kanan — Hybrid two-phase breakdown (GA phase | PSO phase)
+    """
     plt.rcParams.update({
         'text.color': '#1a1a1a', 'axes.labelcolor': '#1a1a1a',
         'figure.facecolor': '#ffffff', 'axes.facecolor': '#f8f8f8',
     })
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4), facecolor='white')
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), facecolor='white')
 
-    for ax, key, title in [
-        (axes[0], 'best_history', 'Best Fitness Convergence'),
-        (axes[1], 'avg_history',  'Average Fitness Convergence'),
-    ]:
-        ax.plot(ga_hist[key],  label='GA',  lw=2, color='#3a3aaa', marker='o', ms=3, markevery=5)
-        ax.plot(pso_hist[key], label='PSO', lw=2, color='#2d7a1b', marker='s', ms=3, markevery=5)
-        ax.set_xlabel('Generation / Iteration', fontsize=11, color='#1a1a1a')
-        ax.set_ylabel('Fitness',                fontsize=11, color='#1a1a1a')
-        ax.set_title(title,                     fontsize=13, fontweight='bold', color='#1a1a1a')
-        ax.legend(fontsize=10); ax.grid(True, alpha=0.3)
-        for spine in ax.spines.values(): spine.set_edgecolor('#ccc')
+    # ── Subplot kiri: Perbandingan langsung ───────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(ga_hist['best_history'],  label='GA',  lw=2, color='#3a3aaa',
+             marker='o', ms=3, markevery=max(1, len(ga_hist['best_history'])//10))
+    ax1.plot(pso_hist['best_history'], label='PSO', lw=2, color='#2d7a1b',
+             marker='s', ms=3, markevery=max(1, len(pso_hist['best_history'])//10))
+
+    hyb_combined = hybrid_hist['ga_best_history'] + hybrid_hist['pso_best_history']
+    ax1.plot(hyb_combined, label='Hybrid GA-PSO', lw=2.5, color='#c05000',
+             marker='^', ms=3, markevery=max(1, len(hyb_combined)//10), linestyle='--')
+    n_ga_steps = len(hybrid_hist['ga_best_history'])
+    ax1.axvline(x=n_ga_steps, color='#c05000', linestyle=':', alpha=0.5, lw=1.5,
+                label=f'PSO phase mulai (step {n_ga_steps})')
+
+    ax1.set_xlabel('Step (Generasi / Iterasi)', fontsize=11, color='#1a1a1a')
+    ax1.set_ylabel('Fitness', fontsize=11, color='#1a1a1a')
+    ax1.set_title('Best Fitness: GA vs PSO vs Hybrid', fontsize=12, fontweight='bold', color='#1a1a1a')
+    ax1.legend(fontsize=8); ax1.grid(True, alpha=0.3)
+    for sp in ax1.spines.values(): sp.set_edgecolor('#ccc')
+
+    # ── Subplot kanan: Hybrid two-phase breakdown ─────────────────────────────
+    ax2 = axes[1]
+    n_ga  = len(hybrid_hist['ga_best_history'])
+    n_pso = len(hybrid_hist['pso_best_history'])
+    x_ga  = list(range(n_ga))
+    x_pso = list(range(n_ga, n_ga + n_pso))
+
+    # GA Phase
+    ax2.plot(x_ga, hybrid_hist['ga_best_history'], label='GA Phase — Best (Kombinasi)',
+             lw=2, color='#3a3aaa', marker='o', ms=4,
+             markevery=max(1, n_ga//8))
+    ax2.plot(x_ga, hybrid_hist['ga_avg_history'],  label='GA Phase — Avg',
+             lw=1.5, color='#3a3aaa', alpha=0.4, linestyle='--')
+
+    # PSO Phase
+    if n_pso > 0:
+        ax2.plot(x_pso, hybrid_hist['pso_best_history'], label='PSO Phase — Best (Porsi)',
+                 lw=2, color='#2d7a1b', marker='s', ms=4,
+                 markevery=max(1, n_pso//8))
+        ax2.plot(x_pso, hybrid_hist['pso_avg_history'],  label='PSO Phase — Avg',
+                 lw=1.5, color='#2d7a1b', alpha=0.4, linestyle='--')
+
+    # Divider garis transisi
+    ax2.axvline(x=n_ga, color='gray', linestyle='--', alpha=0.7, lw=2)
+
+    # Shading per phase
+    ymin_, ymax_ = ax2.get_ylim()
+    ax2.axvspan(0,    n_ga,         alpha=0.05, color='#3a3aaa')
+    ax2.axvspan(n_ga, n_ga + n_pso, alpha=0.05, color='#2d7a1b')
+
+    # Anotasi phase
+    ax2.text(n_ga * 0.5,  ax2.get_ylim()[0] if ax2.get_ylim()[0] != 0 else 0,
+             'Phase 1\nGA', ha='center', va='bottom', fontsize=8, color='#3a3aaa', alpha=0.7)
+    if n_pso > 0:
+        ax2.text(n_ga + n_pso * 0.5, ax2.get_ylim()[0] if ax2.get_ylim()[0] != 0 else 0,
+                 'Phase 2\nPSO', ha='center', va='bottom', fontsize=8, color='#2d7a1b', alpha=0.7)
+
+    ax2.set_xlabel('Step', fontsize=11, color='#1a1a1a')
+    ax2.set_ylabel('Fitness', fontsize=11, color='#1a1a1a')
+    ax2.set_title('Hybrid: Two-Phase Convergence Breakdown', fontsize=12, fontweight='bold', color='#1a1a1a')
+    ax2.legend(fontsize=8, loc='lower right'); ax2.grid(True, alpha=0.3)
+    for sp in ax2.spines.values(): sp.set_edgecolor('#ccc')
 
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
@@ -631,29 +938,28 @@ def display_convergence_st(ga_hist: Dict, pso_hist: Dict):
     plt.rcdefaults()
 
 
-def display_comparison_st(ga_res: Dict, pso_res: Dict):
-    """Streamlit replacement of print_comparison_summary()."""
-    st.markdown('<div class="section-title">📊 Perbandingan GA vs PSO</div>', unsafe_allow_html=True)
-
-    ga_n = ga_res['nutrition']; pso_n = pso_res['nutrition']
-    rows = [
-        {"Metrik": "Best Fitness",    "GA": f"{ga_res['fitness']:.6f}",
-         "PSO": f"{pso_res['fitness']:.6f}",
-         "Unggul": "🏆 GA" if ga_res['fitness'] > pso_res['fitness'] else "🏆 PSO"},
-        {"Metrik": "Total Biaya (Rp)", "GA": f"{ga_n['cost']:,.0f}",
-         "PSO": f"{pso_n['cost']:,.0f}",
-         "Unggul": "🏆 GA" if ga_n['cost'] < pso_n['cost'] else "🏆 PSO"},
-        {"Metrik": "Waktu Komputasi", "GA": f"{ga_res['time']:.2f}s",
-         "PSO": f"{pso_res['time']:.2f}s",
-         "Unggul": "🏆 GA" if ga_res['time'] < pso_res['time'] else "🏆 PSO"},
-        {"Metrik": "Kalori (kkal)",   "GA": f"{ga_n['kalori']:.1f}",
-         "PSO": f"{pso_n['kalori']:.1f}", "Unggul": "—"},
-        {"Metrik": "Protein (g)",     "GA": f"{ga_n['protein']:.1f}",
-         "PSO": f"{pso_n['protein']:.1f}", "Unggul": "—"},
-        {"Metrik": "Karbohidrat (g)", "GA": f"{ga_n['karbo']:.1f}",
-         "PSO": f"{pso_n['karbo']:.1f}", "Unggul": "—"},
-    ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+def display_convergence_st(ga_hist: Dict, pso_hist: Dict):
+    """Kurva konvergensi standar GA vs PSO (digunakan pada weekly & stats)."""
+    plt.rcParams.update({
+        'text.color': '#1a1a1a', 'axes.labelcolor': '#1a1a1a',
+        'figure.facecolor': '#ffffff', 'axes.facecolor': '#f8f8f8',
+    })
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4), facecolor='white')
+    for ax, key, title in [
+        (axes[0], 'best_history', 'Best Fitness Convergence'),
+        (axes[1], 'avg_history',  'Average Fitness Convergence'),
+    ]:
+        ax.plot(ga_hist[key],  label='GA',  lw=2, color='#3a3aaa', marker='o', ms=3, markevery=5)
+        ax.plot(pso_hist[key], label='PSO', lw=2, color='#2d7a1b', marker='s', ms=3, markevery=5)
+        ax.set_xlabel('Generation / Iteration', fontsize=11, color='#1a1a1a')
+        ax.set_ylabel('Fitness', fontsize=11, color='#1a1a1a')
+        ax.set_title(title, fontsize=13, fontweight='bold', color='#1a1a1a')
+        ax.legend(fontsize=10); ax.grid(True, alpha=0.3)
+        for spine in ax.spines.values(): spine.set_edgecolor('#ccc')
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+    plt.rcdefaults()
 
 
 # ── Session state init ────────────────────────────────────────────────────────
@@ -671,124 +977,190 @@ def build_sidebar():
         st.markdown("""
         <div style="text-align:center;padding:0.8rem 0 0.4rem;">
             <div style="font-size:2rem;">🥗</div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1.2rem;color:#3a3aaa;font-weight:bold;">
+            <div style="font-family:'DM Serif Display',serif;font-size:1.15rem;
+                        background:linear-gradient(90deg,#5555cc,#2d7a1b);
+                        -webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:bold;">
                 Optimasi Menu
             </div>
-            <div style="font-size:0.72rem;color:#888;letter-spacing:0.5px;">SMARTPLATE YEAR 2</div>
+            <div style="font-size:0.7rem;color:#888;letter-spacing:0.5px;">HYBRID GA-PSO · SMARTPLATE YEAR 2</div>
         </div>
         """, unsafe_allow_html=True)
         st.divider()
 
-        st.markdown("**⚙️ Parameter GA**")
-        ga_pop  = st.slider("Population Size", 10, 50, 30, 5)
-        ga_gen  = st.slider("Generations",     20, 100, 50, 10)
-        ga_pc   = st.slider("Crossover Rate",  0.5, 1.0, 0.8, 0.05)
-        ga_pm   = st.slider("Mutation Rate",   0.05, 0.5, 0.2, 0.05)
+        # ── Parameter GA ──────────────────────────────────────────────
+        st.markdown("**🧬 Parameter GA** *(Standalone & Hybrid Phase 1)*")
+        ga_pop = st.slider("Population Size", 10, 50, 30, 5)
+        ga_gen = st.slider("Generations",     20, 100, 50, 10)
+        ga_pc  = st.slider("Crossover Rate",  0.5, 1.0, 0.8, 0.05)
+        ga_pm  = st.slider("Mutation Rate",   0.05, 0.5, 0.2, 0.05)
 
         st.divider()
-        st.markdown("**⚙️ Parameter PSO**")
-        pso_n   = st.slider("Jumlah Particle", 10, 50, 30, 5)
-        pso_it  = st.slider("Iterations",      20, 100, 50, 10)
-        pso_w   = st.slider("Inertia (w)",     0.3, 1.0, 0.7, 0.05)
-        pso_c1  = st.slider("Cognitive (c1)",  0.5, 2.5, 1.5, 0.1)
-        pso_c2  = st.slider("Social (c2)",     0.5, 2.5, 1.5, 0.1)
+
+        # ── Parameter PSO ─────────────────────────────────────────────
+        st.markdown("**🐝 Parameter PSO** *(Standalone & Hybrid Phase 2)*")
+        pso_n  = st.slider("Jumlah Particle", 10, 50, 30, 5)
+        pso_it = st.slider("Iterations",      20, 100, 50, 10)
+        pso_w  = st.slider("Inertia (w)",     0.3, 1.0, 0.7, 0.05)
+        pso_c1 = st.slider("Cognitive (c1)",  0.5, 2.5, 1.5, 0.1)
+        pso_c2 = st.slider("Social (c2)",     0.5, 2.5, 1.5, 0.1)
+
+        st.divider()
+
+        # ── Parameter Hybrid ─────────────────────────────────────────
+        st.markdown("**⚡ Hybrid GA-PSO — Budget per Phase**")
+        st.markdown("""
+        <div class="info-box" style="font-size:0.75rem;padding:8px 12px;margin:4px 0 8px;">
+        Atur berapa generasi/iterasi yang dialokasikan ke masing-masing phase.
+        Total budget ≈ Phase 1 + Phase 2 (setara dengan standalone GA atau PSO).
+        </div>
+        """, unsafe_allow_html=True)
+        hybrid_ga_gen = st.slider("Phase 1 — GA Generations",  5, 80, 25, 5, key='h_ga_gen',
+                                   help="Generasi GA untuk eksplorasi kombinasi makanan")
+        hybrid_pso_it = st.slider("Phase 2 — PSO Iterations",  5, 80, 25, 5, key='h_pso_it',
+                                   help="Iterasi PSO untuk fine-tune porsi makanan")
+        st.caption(f"Total budget Hybrid: **{hybrid_ga_gen + hybrid_pso_it} steps** "
+                   f"(GA {hybrid_ga_gen} + PSO {hybrid_pso_it})")
 
         st.divider()
         seed = st.number_input("Random Seed", value=42, step=1)
 
         st.divider()
         st.markdown('<div class="sidebar-label">Target Nutrisi Harian</div>', unsafe_allow_html=True)
-        tgt = [("Kalori",      "1800–2200 kkal"),
-               ("Protein",     "≥ 50 g"),
-               ("Karbohidrat", "250–350 g"),
-               ("Budget",      "≤ Rp 50.000")]
-        for lbl, val in tgt:
+        for lbl, val in [("Kalori","1800–2200 kkal"),("Protein","≥ 50 g"),
+                          ("Karbohidrat","250–350 g"),("Budget","≤ Rp 50.000")]:
             a, b = st.columns(2); a.caption(lbl); b.markdown(f"**{val}**")
 
         st.divider()
         st.markdown('<div class="sidebar-label">Referensi</div>', unsafe_allow_html=True)
         st.markdown("""<div style="font-size:0.72rem;color:#aaa;line-height:1.6;">
         Permenkes No. 28/2019 · TKPI 2017 ·
-        Holland (1975) · Kennedy & Eberhart (1995)
+        Holland (1975) · Kennedy & Eberhart (1995) ·
+        Kao & Zahara (2008) — Hybrid GA-PSO
         </div>""", unsafe_allow_html=True)
 
-    return (dict(pop_size=ga_pop, generations=ga_gen, pc=ga_pc, pm=ga_pm),
-            dict(n_particles=pso_n, iterations=pso_it, w=pso_w, c1=pso_c1, c2=pso_c2),
-            int(seed))
+    ga_p = dict(pop_size=ga_pop, generations=ga_gen, pc=ga_pc, pm=ga_pm)
+    pso_p = dict(n_particles=pso_n, iterations=pso_it, w=pso_w, c1=pso_c1, c2=pso_c2)
+    hybrid_p = dict(
+        ga_pop_size=ga_pop,   ga_generations=hybrid_ga_gen,
+        ga_pc=ga_pc,          ga_pm=ga_pm,
+        pso_particles=pso_n,  pso_iterations=hybrid_pso_it,
+        pso_w=pso_w,          pso_c1=pso_c1, pso_c2=pso_c2,
+    )
+    return ga_p, pso_p, hybrid_p, int(seed)
 
 
 # ==============================================================================
-# TAB 1 — Optimasi 1 Hari
+# TAB 1 — Optimasi 1 Hari (GA + PSO + Hybrid)
 # ==============================================================================
 
-def tab_single_day(ga_p, pso_p, seed):
+def tab_single_day(ga_p, pso_p, hybrid_p, seed):
+    # Penjelasan arsitektur Hybrid
     st.markdown("""
     <div class="info-box">
-    Jalankan <strong>GA</strong> dan <strong>PSO</strong> sekali untuk menghasilkan menu optimal 1 hari.
-    Hasil mencakup perbandingan fitness, biaya, nutrisi, dan kurva konvergensi.
+    <strong>⚡ Hybrid GA-PSO</strong> — Dua fase dengan objective berbeda:
     </div>
     """, unsafe_allow_html=True)
+    col_ph1, col_ph2 = st.columns(2)
+    with col_ph1:
+        st.markdown("""
+        <div class="phase-ga">
+        <span class="phase-label">🧬 Phase 1 — GA: Kombinasi Makanan</span>
+        <span class="phase-desc">GA mengeksplorasi ruang kombinatorial — <em>makanan apa saja</em>
+        yang masuk ke menu. Setiap kromosom merepresentasikan keputusan seleksi item.
+        Crossover & mutasi memungkinkan eksplorasi kombinasi yang beragam.</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_ph2:
+        st.markdown("""
+        <div class="phase-pso">
+        <span class="phase-label">🐝 Phase 2 — PSO: Optimasi Porsi</span>
+        <span class="phase-desc">PSO menerima kombinasi terbaik dari GA, lalu mengoptimasi
+        <em>berapa banyak</em> porsi tiap item secara kontinu. Ruang pencarian jauh lebih
+        kecil (hanya item aktif), sehingga konvergensi lebih presisi.</span>
+        </div>
+        """, unsafe_allow_html=True)
 
-    if st.button("🚀  Jalankan Optimasi 1 Hari", use_container_width=True):
+    st.markdown("")
+    if st.button("🚀  Jalankan Optimasi 1 Hari (GA + PSO + Hybrid)", use_container_width=True):
         np.random.seed(seed)
-        col_prog = st.empty()
+        placeholder = st.empty()
 
-        with col_prog.container():
-            with st.spinner("Menjalankan Genetic Algorithm…"):
+        with placeholder.container():
+            with st.spinner("🧬 Menjalankan Genetic Algorithm…"):
                 ga  = GeneticAlgorithm(**ga_p)
-                gs, gf, gh = ga.evolve(verbose=False)
-            with st.spinner("Menjalankan Particle Swarm Optimization…"):
+                gs, gf, gh = ga.evolve()
+            with st.spinner("🐝 Menjalankan Particle Swarm Optimization…"):
                 pso = ParticleSwarmOptimization(**pso_p)
-                ps, pf, ph = pso.optimize(verbose=False)
+                ps, pf, ph = pso.optimize()
+            with st.spinner("⚡ Menjalankan Hybrid GA-PSO (Phase 1: GA Kombinasi → Phase 2: PSO Porsi)…"):
+                hyb = HybridGAPSO(**hybrid_p)
+                hs, hf, hh = hyb.run()
 
+        placeholder.empty()
         st.session_state.single_result = {
-            'ga':  {'solution': gs, 'fitness': gf, 'history': gh, 'nutrition': calculate_nutrition(gs), 'time': gh['time']},
-            'pso': {'solution': ps, 'fitness': pf, 'history': ph, 'nutrition': calculate_nutrition(ps), 'time': ph['time']},
+            'ga':  {'solution': gs, 'fitness': gf, 'history': gh,
+                    'nutrition': calculate_nutrition(gs), 'time': gh['time']},
+            'pso': {'solution': ps, 'fitness': pf, 'history': ph,
+                    'nutrition': calculate_nutrition(ps), 'time': ph['time']},
+            'hyb': {'solution': hs, 'fitness': hf, 'history': hh,
+                    'nutrition': calculate_nutrition(hs), 'time': hh['time'],
+                    'n_selected': hh.get('n_selected', 0)},
         }
-        col_prog.empty()
 
     res = st.session_state.single_result
     if res is None:
         return
 
-    # Comparison summary
-    display_comparison_st(res['ga'], res['pso'])
+    # ── 3-way comparison table ───────────────────────────────────────────────
+    display_three_way_comparison_st(res['ga'], res['pso'], res['hyb'])
+
+    # Info item yang dipilih GA pada Hybrid
+    n_sel = res['hyb'].get('n_selected', 0)
+    st.caption(f"ℹ️ Hybrid Phase 1 (GA) memilih **{n_sel} item makanan** — "
+               f"Phase 2 (PSO) mengoptimasi porsi hanya pada {n_sel} dimensi tersebut.")
+
     st.divider()
 
-    # Convergence chart
+    # ── Convergence charts ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">📈 Kurva Konvergensi</div>', unsafe_allow_html=True)
-    display_convergence_st(res['ga']['history'], res['pso']['history'])
+    display_convergence_all_st(res['ga']['history'], res['pso']['history'], res['hyb']['history'])
+
     st.divider()
 
-    # Side-by-side menus
+    # ── Detail menu per algoritma ────────────────────────────────────────────
     st.markdown('<div class="section-title">🍽️ Detail Menu</div>', unsafe_allow_html=True)
-    tab_ga, tab_pso = st.tabs(["🧬 Genetic Algorithm", "🐝 Particle Swarm Opt."])
-    with tab_ga:
-        display_menu_st(res['ga']['solution'], "GA")
-    with tab_pso:
-        display_menu_st(res['pso']['solution'], "PSO")
+    t_ga, t_pso, t_hyb = st.tabs(["🧬 Genetic Algorithm", "🐝 Particle Swarm Opt.",
+                                    "⚡ Hybrid GA-PSO"])
+    with t_ga:  display_menu_st(res['ga']['solution'],  "GA")
+    with t_pso: display_menu_st(res['pso']['solution'], "PSO")
+    with t_hyb: display_menu_st(res['hyb']['solution'], "Hybrid GA-PSO")
 
 
 # ==============================================================================
 # TAB 2 — Menu 7 Hari
 # ==============================================================================
 
-def tab_weekly(ga_p, pso_p, seed):
+def tab_weekly(ga_p, pso_p, hybrid_p, seed):
     DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
 
     st.markdown("""
     <div class="info-box">
-    Generate menu seimbang untuk <strong>7 hari</strong> menggunakan GA dan PSO.
+    Generate menu seimbang untuk <strong>7 hari</strong> menggunakan GA, PSO, atau Hybrid.
     Setiap hari dioptimasi secara independen dengan seed berbeda untuk variasi menu.
-    Estimasi waktu: ~1–3 menit tergantung parameter.
+    Estimasi waktu: <strong>GA/PSO</strong> ~1–3 menit · <strong>Hybrid</strong> ~2–4 menit · <strong>Semua</strong> ~4–8 menit.
     </div>
     """, unsafe_allow_html=True)
 
-    algo = st.radio("Algoritma", ["GA", "PSO", "Keduanya (GA + PSO)"],
-                    horizontal=True, index=2)
+    algo = st.radio("Algoritma untuk 7 Hari",
+                    ["GA", "PSO", "Hybrid GA-PSO", "GA + PSO", "Semua (GA + PSO + Hybrid)"],
+                    horizontal=True, index=3)
+
+    run_ga     = algo in ("GA", "GA + PSO", "Semua (GA + PSO + Hybrid)")
+    run_pso    = algo in ("PSO", "GA + PSO", "Semua (GA + PSO + Hybrid)")
+    run_hybrid = algo in ("Hybrid GA-PSO", "Semua (GA + PSO + Hybrid)")
 
     if st.button("📅  Generate Menu 7 Hari", use_container_width=True):
-        results = {'GA': [], 'PSO': []}
+        results  = {'GA': [], 'PSO': [], 'Hybrid': []}
         progress = st.progress(0)
         status   = st.empty()
 
@@ -796,18 +1168,21 @@ def tab_weekly(ga_p, pso_p, seed):
             np.random.seed((seed + d_idx) * 7)
             status.markdown(f"⏳ Hari {d_idx+1}/7 — **{day}**…")
 
-            if algo in ("GA", "Keduanya (GA + PSO)"):
-                ga = GeneticAlgorithm(**ga_p)
-                gs, gf, gh = ga.evolve(verbose=False)
-                results['GA'].append({'day': day, 'solution': gs, 'fitness': gf,
-                                      'nutrition': calculate_nutrition(gs)})
-
-            if algo in ("PSO", "Keduanya (GA + PSO)"):
-                pso = ParticleSwarmOptimization(**pso_p)
-                ps, pf, ph = pso.optimize(verbose=False)
-                results['PSO'].append({'day': day, 'solution': ps, 'fitness': pf,
-                                       'nutrition': calculate_nutrition(ps)})
-
+            if run_ga:
+                ga_ = GeneticAlgorithm(**ga_p)
+                gs_, gf_, gh_ = ga_.evolve()
+                results['GA'].append({'day': day, 'solution': gs_, 'fitness': gf_,
+                                      'nutrition': calculate_nutrition(gs_)})
+            if run_pso:
+                pso_ = ParticleSwarmOptimization(**pso_p)
+                ps_, pf_, ph_ = pso_.optimize()
+                results['PSO'].append({'day': day, 'solution': ps_, 'fitness': pf_,
+                                       'nutrition': calculate_nutrition(ps_)})
+            if run_hybrid:
+                hyb_ = HybridGAPSO(**hybrid_p)
+                hs_, hf_, hh_ = hyb_.run()
+                results['Hybrid'].append({'day': day, 'solution': hs_, 'fitness': hf_,
+                                          'nutrition': calculate_nutrition(hs_)})
             progress.progress((d_idx + 1) / 7)
 
         progress.empty(); status.empty()
@@ -818,115 +1193,124 @@ def tab_weekly(ga_p, pso_p, seed):
         return
 
     results = res['results']
-    algo    = res['algo']
     st.divider()
 
-    # Weekly summary table
     def make_summary_df(day_list):
         return pd.DataFrame([{
             'Hari': r['day'],
             'Fitness': f"{r['fitness']:.5f}",
             'Kalori (kkal)': f"{r['nutrition']['kalori']:.0f}",
-            'Protein (g)': f"{r['nutrition']['protein']:.1f}",
-            'Karbo (g)': f"{r['nutrition']['karbo']:.1f}",
-            'Biaya (Rp)': f"{r['nutrition']['cost']:,.0f}",
+            'Protein (g)':   f"{r['nutrition']['protein']:.1f}",
+            'Karbo (g)':     f"{r['nutrition']['karbo']:.1f}",
+            'Biaya (Rp)':    f"{r['nutrition']['cost']:,.0f}",
         } for r in day_list])
 
-    if algo in ("GA", "Keduanya (GA + PSO)") and results['GA']:
-        st.markdown('<div class="section-title">🧬 Ringkasan 7 Hari — GA</div>', unsafe_allow_html=True)
-        st.dataframe(make_summary_df(results['GA']), use_container_width=True, hide_index=True)
-        total_ga = sum(r['nutrition']['cost'] for r in results['GA'])
-        st.caption(f"Total biaya 7 hari: **Rp {total_ga:,.0f}** · Rata-rata: **Rp {total_ga/7:,.0f}/hari**")
+    lbl_map = [('GA', '🧬 Ringkasan 7 Hari — GA'),
+               ('PSO', '🐝 Ringkasan 7 Hari — PSO'),
+               ('Hybrid', '⚡ Ringkasan 7 Hari — Hybrid GA-PSO')]
+    for key, title in lbl_map:
+        if results[key]:
+            st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+            st.dataframe(make_summary_df(results[key]), use_container_width=True, hide_index=True)
+            total = sum(r['nutrition']['cost'] for r in results[key])
+            st.caption(f"Total biaya 7 hari: **Rp {total:,.0f}** · Rata-rata: **Rp {total/7:,.0f}/hari**")
 
-    if algo in ("PSO", "Keduanya (GA + PSO)") and results['PSO']:
-        st.markdown('<div class="section-title">🐝 Ringkasan 7 Hari — PSO</div>', unsafe_allow_html=True)
-        st.dataframe(make_summary_df(results['PSO']), use_container_width=True, hide_index=True)
-        total_pso = sum(r['nutrition']['cost'] for r in results['PSO'])
-        st.caption(f"Total biaya 7 hari: **Rp {total_pso:,.0f}** · Rata-rata: **Rp {total_pso/7:,.0f}/hari**")
-
-    # Detail per hari
     st.divider()
     st.markdown('<div class="section-title">🍽️ Detail Menu per Hari</div>', unsafe_allow_html=True)
 
-    if algo in ("GA", "Keduanya (GA + PSO)") and results['GA']:
-        with st.expander("📋 Detail Harian — GA"):
-            day_tabs = st.tabs([r['day'] for r in results['GA']])
-            for i, dtab in enumerate(day_tabs):
-                with dtab:
-                    display_menu_st(results['GA'][i]['solution'])
-
-    if algo in ("PSO", "Keduanya (GA + PSO)") and results['PSO']:
-        with st.expander("📋 Detail Harian — PSO"):
-            day_tabs = st.tabs([r['day'] for r in results['PSO']])
-            for i, dtab in enumerate(day_tabs):
-                with dtab:
-                    display_menu_st(results['PSO'][i]['solution'])
+    exp_map = [('GA', '📋 Detail Harian — GA'),
+               ('PSO', '📋 Detail Harian — PSO'),
+               ('Hybrid', '📋 Detail Harian — Hybrid GA-PSO')]
+    for key, exp_label in exp_map:
+        if results[key]:
+            with st.expander(exp_label):
+                day_tabs = st.tabs([r['day'] for r in results[key]])
+                for i, dtab in enumerate(day_tabs):
+                    with dtab:
+                        display_menu_st(results[key][i]['solution'])
 
 
 # ==============================================================================
-# TAB 3 — Analisis Statistik
+# TAB 3 — Analisis Statistik (3-way: GA vs PSO vs Hybrid)
 # ==============================================================================
 
-def tab_stats(ga_p, pso_p, seed):
+def tab_stats(ga_p, pso_p, hybrid_p, seed):
     st.markdown("""
     <div class="info-box">
-    Jalankan GA dan PSO sebanyak <em>n</em> kali untuk analisis statistik:
-    <strong>Paired T-Test</strong>, <strong>95% Confidence Interval</strong>, dan distribusi fitness.
+    Jalankan GA, PSO, dan <strong>Hybrid GA-PSO</strong> sebanyak <em>n</em> kali untuk analisis statistik:
+    <strong>Paired T-Test</strong> (pairwise 3-way), <strong>95% Confidence Interval</strong>, dan distribusi fitness.
     </div>
     <div class="warn-box">
-    ⏱️ <strong>Perkiraan waktu:</strong> 10 run ≈ 1–2 menit · 30 run ≈ 5–10 menit.
-    Mulai dengan 10 run untuk uji coba.
+    ⏱️ <strong>Perkiraan waktu per run:</strong> ±2–6 detik (GA) + ±2–6 detik (PSO) + ±2–5 detik (Hybrid).
+    Mulai dengan 5–10 run untuk uji coba.
     </div>
     """, unsafe_allow_html=True)
 
     n_runs = st.slider("Jumlah Run", min_value=5, max_value=30, value=10, step=5)
 
-    if st.button(f"📊  Jalankan Analisis Statistik ({n_runs} run)", use_container_width=True):
-        ga_fit, ga_cost, ga_time_list = [], [], []
-        pso_fit, pso_cost, pso_time_list = [], [], []
+    if st.button(f"📊  Jalankan Analisis Statistik 3-way ({n_runs} run × 3 algoritma)",
+                 use_container_width=True):
+        ga_fit,  ga_cost,  ga_time  = [], [], []
+        pso_fit, pso_cost, pso_time = [], [], []
+        hyb_fit, hyb_cost, hyb_time = [], [], []
 
         progress = st.progress(0)
         status   = st.empty()
 
         for run in range(n_runs):
             np.random.seed(seed + run * 123)
-            status.markdown(f"⏳ Run **{run+1}/{n_runs}**…")
+            status.markdown(f"⏳ Run **{run+1}/{n_runs}** — GA → PSO → Hybrid…")
 
-            ga = GeneticAlgorithm(**ga_p)
-            gs, gf, gh = ga.evolve(verbose=False)
-            gn = calculate_nutrition(gs)
-            ga_fit.append(gf); ga_cost.append(gn['cost']); ga_time_list.append(gh['time'])
+            _ga  = GeneticAlgorithm(**ga_p)
+            gs_, gf_, gh_ = _ga.evolve()
+            gn_ = calculate_nutrition(gs_)
+            ga_fit.append(gf_); ga_cost.append(gn_['cost']); ga_time.append(gh_['time'])
 
-            pso = ParticleSwarmOptimization(**pso_p)
-            ps, pf, ph = pso.optimize(verbose=False)
-            pn = calculate_nutrition(ps)
-            pso_fit.append(pf); pso_cost.append(pn['cost']); pso_time_list.append(ph['time'])
+            _pso = ParticleSwarmOptimization(**pso_p)
+            ps_, pf_, ph_ = _pso.optimize()
+            pn_ = calculate_nutrition(ps_)
+            pso_fit.append(pf_); pso_cost.append(pn_['cost']); pso_time.append(ph_['time'])
+
+            _hyb = HybridGAPSO(**hybrid_p)
+            hs_, hf_, hh_ = _hyb.run()
+            hn_ = calculate_nutrition(hs_)
+            hyb_fit.append(hf_); hyb_cost.append(hn_['cost']); hyb_time.append(hh_['time'])
 
             progress.progress((run + 1) / n_runs)
 
         progress.empty(); status.empty()
 
-        ga_fit_a = np.array(ga_fit); ga_cost_a = np.array(ga_cost); ga_time_a = np.array(ga_time_list)
-        pso_fit_a = np.array(pso_fit); pso_cost_a = np.array(pso_cost); pso_time_a = np.array(pso_time_list)
+        ga_fa  = np.array(ga_fit);  ga_ca  = np.array(ga_cost);  ga_ta  = np.array(ga_time)
+        pso_fa = np.array(pso_fit); pso_ca = np.array(pso_cost); pso_ta = np.array(pso_time)
+        hyb_fa = np.array(hyb_fit); hyb_ca = np.array(hyb_cost); hyb_ta = np.array(hyb_time)
 
-        # T-test
-        t_f, p_f = stats.ttest_rel(ga_fit_a, pso_fit_a)
-        t_c, p_c = stats.ttest_rel(ga_cost_a, pso_cost_a)
-        t_t, p_t = stats.ttest_rel(ga_time_a, pso_time_a)
+        # Pairwise Paired T-Tests (3 pasang × 3 metrik)
+        def _ttest(a, b): return stats.ttest_rel(a, b)
 
-        # CI 95%
-        df = n_runs - 1
-        t_crit = stats.t.ppf(0.975, df)
+        df_    = n_runs - 1
+        t_crit = stats.t.ppf(0.975, df_)
         def ci(arr): return t_crit * (np.std(arr, ddof=1) / np.sqrt(n_runs))
 
         st.session_state.stats_result = {
             'n_runs': n_runs,
-            'ga':  {'fit': ga_fit_a,  'cost': ga_cost_a,  'time': ga_time_a},
-            'pso': {'fit': pso_fit_a, 'cost': pso_cost_a, 'time': pso_time_a},
-            'ttest': {'fitness': (t_f,p_f), 'cost': (t_c,p_c), 'time': (t_t,p_t)},
+            'ga':  {'fit': ga_fa,  'cost': ga_ca,  'time': ga_ta},
+            'pso': {'fit': pso_fa, 'cost': pso_ca, 'time': pso_ta},
+            'hyb': {'fit': hyb_fa, 'cost': hyb_ca, 'time': hyb_ta},
+            'ttest_pairs': {
+                'GA vs PSO':    {k: _ttest(ga_fa  if k=='fit' else ga_ca  if k=='cost' else ga_ta,
+                                           pso_fa if k=='fit' else pso_ca if k=='cost' else pso_ta)
+                                 for k in ('fit','cost','time')},
+                'GA vs Hybrid': {k: _ttest(ga_fa  if k=='fit' else ga_ca  if k=='cost' else ga_ta,
+                                           hyb_fa if k=='fit' else hyb_ca if k=='cost' else hyb_ta)
+                                 for k in ('fit','cost','time')},
+                'PSO vs Hybrid':{k: _ttest(pso_fa if k=='fit' else pso_ca if k=='cost' else pso_ta,
+                                           hyb_fa if k=='fit' else hyb_ca if k=='cost' else hyb_ta)
+                                 for k in ('fit','cost','time')},
+            },
             'ci': {
-                'ga':  {'fit': ci(ga_fit_a),  'cost': ci(ga_cost_a),  'time': ci(ga_time_a)},
-                'pso': {'fit': ci(pso_fit_a), 'cost': ci(pso_cost_a), 'time': ci(pso_time_a)},
+                'ga':  {'fit': ci(ga_fa),  'cost': ci(ga_ca),  'time': ci(ga_ta)},
+                'pso': {'fit': ci(pso_fa), 'cost': ci(pso_ca), 'time': ci(pso_ta)},
+                'hyb': {'fit': ci(hyb_fa), 'cost': ci(hyb_ca), 'time': ci(hyb_ta)},
             },
         }
 
@@ -935,75 +1319,75 @@ def tab_stats(ga_p, pso_p, seed):
         return
 
     n   = r['n_runs']
-    ga  = r['ga']; pso = r['pso']; tt = r['ttest']; ci = r['ci']
+    ga  = r['ga']; pso = r['pso']; hyb = r['hyb']
+    ci  = r['ci']; pairs = r['ttest_pairs']
     st.divider()
 
-    # Descriptive stats table
+    # ── Descriptive stats ────────────────────────────────────────────────────
     st.markdown('<div class="section-title">📋 Statistik Deskriptif</div>', unsafe_allow_html=True)
     desc_rows = []
-    for algo_lbl, d in [("GA", ga), ("PSO", pso)]:
-        for metric, key, unit in [("Fitness","fit",""), ("Biaya (Rp)","cost",""), ("Waktu (s)","time","")]:
+    for algo_lbl, d in [("GA", ga), ("PSO", pso), ("Hybrid", hyb)]:
+        for metric, key in [("Fitness","fit"),("Biaya (Rp)","cost"),("Waktu (s)","time")]:
             arr = d[key]
             desc_rows.append({
                 'Algoritma': algo_lbl, 'Metrik': metric,
-                'Mean': f"{np.mean(arr):.4f}" if key=='fit' else f"{np.mean(arr):,.1f}",
-                'Std':  f"{np.std(arr):.4f}"  if key=='fit' else f"{np.std(arr):,.1f}",
-                'Min':  f"{np.min(arr):.4f}"  if key=='fit' else f"{np.min(arr):,.1f}",
-                'Max':  f"{np.max(arr):.4f}"  if key=='fit' else f"{np.max(arr):,.1f}",
+                'Mean': f"{np.mean(arr):.4f}" if key=='fit' else f"{np.mean(arr):,.2f}",
+                'Std':  f"{np.std(arr):.4f}"  if key=='fit' else f"{np.std(arr):,.2f}",
+                'Min':  f"{np.min(arr):.4f}"  if key=='fit' else f"{np.min(arr):,.2f}",
+                'Max':  f"{np.max(arr):.4f}"  if key=='fit' else f"{np.max(arr):,.2f}",
             })
     st.dataframe(pd.DataFrame(desc_rows), use_container_width=True, hide_index=True)
 
-    # T-test results
-    st.markdown('<div class="section-title">🔬 Paired T-Test (α = 0.05)</div>', unsafe_allow_html=True)
+    # ── Pairwise Paired T-Tests ──────────────────────────────────────────────
+    st.markdown('<div class="section-title">🔬 Paired T-Test Pairwise (α = 0.05)</div>',
+                unsafe_allow_html=True)
     ttest_rows = []
-    for lbl, (ts, pv), winner_arr_ga, winner_arr_pso, better in [
-        ("Fitness",   tt['fitness'], ga['fit'],  pso['fit'],  "lebih besar"),
-        ("Biaya",     tt['cost'],    ga['cost'],  pso['cost'],  "lebih kecil"),
-        ("Waktu",     tt['time'],    ga['time'],  pso['time'],  "lebih kecil"),
-    ]:
-        if better == "lebih besar":
-            winner = "GA" if np.mean(winner_arr_ga) > np.mean(winner_arr_pso) else "PSO"
-        else:
-            winner = "GA" if np.mean(winner_arr_ga) < np.mean(winner_arr_pso) else "PSO"
-        ttest_rows.append({
-            'Metrik': lbl,
-            'T-Statistic': f"{ts:.4f}",
-            'P-Value': f"{pv:.6f}",
-            'Signifikan': "✅ Ya (p < 0.05)" if pv < 0.05 else "❌ Tidak (p ≥ 0.05)",
-            'Unggul': f"🏆 {winner}",
-        })
+    metric_map = [("Fitness","fit",True),("Biaya (Rp)","cost",False),("Waktu (s)","time",False)]
+    for pair_label, pair_data in pairs.items():
+        for metric_lbl, metric_key, higher_is_better in metric_map:
+            ts, pv = pair_data[metric_key]
+            ttest_rows.append({
+                'Pasangan': pair_label,
+                'Metrik': metric_lbl,
+                'T-Statistic': f"{ts:.4f}",
+                'P-Value': f"{pv:.6f}",
+                'Signifikan': "✅ Ya (p < 0.05)" if pv < 0.05 else "❌ Tidak",
+            })
     st.dataframe(pd.DataFrame(ttest_rows), use_container_width=True, hide_index=True)
 
-    # Confidence Intervals
+    # ── 95% CI ──────────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">📏 95% Confidence Interval</div>', unsafe_allow_html=True)
     ci_rows = []
-    for algo_lbl, d_arr, ci_d in [("GA", ga, ci['ga']), ("PSO", pso, ci['pso'])]:
+    for algo_lbl, d_arr, ci_d in [("GA",ga,ci['ga']),("PSO",pso,ci['pso']),("Hybrid",hyb,ci['hyb'])]:
         ci_rows.append({
             'Algoritma': algo_lbl,
-            'Fitness CI': f"{np.mean(d_arr['fit']):.5f} ± {ci_d['fit']:.5f}",
+            'Fitness CI':    f"{np.mean(d_arr['fit']):.5f} ± {ci_d['fit']:.5f}",
             'Biaya CI (Rp)': f"{np.mean(d_arr['cost']):,.0f} ± {ci_d['cost']:,.0f}",
-            'Waktu CI (s)': f"{np.mean(d_arr['time']):.2f} ± {ci_d['time']:.2f}",
+            'Waktu CI (s)':  f"{np.mean(d_arr['time']):.2f} ± {ci_d['time']:.2f}",
         })
     st.dataframe(pd.DataFrame(ci_rows), use_container_width=True, hide_index=True)
 
-    # Boxplots
-    st.markdown('<div class="section-title">📦 Distribusi ({} Run)</div>'.format(n), unsafe_allow_html=True)
+    # ── Boxplots 3-way ───────────────────────────────────────────────────────
+    st.markdown(f'<div class="section-title">📦 Distribusi ({n} Run)</div>',
+                unsafe_allow_html=True)
 
     plt.rcParams.update({
         'text.color': '#1a1a1a', 'axes.labelcolor': '#1a1a1a',
         'figure.facecolor': '#ffffff', 'axes.facecolor': '#f8f8f8',
     })
-    fig, axes = plt.subplots(1, 3, figsize=(14, 5), facecolor='white')
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), facecolor='white')
+    colors = ['#a0a0f0', '#a0e0a0', '#f0b070']   # GA=blue, PSO=green, Hybrid=orange
 
-    for ax, arr_ga, arr_pso, title, ylabel in [
-        (axes[0], ga['fit'],  pso['fit'],  'Fitness Distribution',  'Fitness'),
-        (axes[1], ga['cost'], pso['cost'], 'Cost Distribution (Rp)', 'Rp'),
-        (axes[2], ga['time'], pso['time'], 'Time Distribution (s)',  'Seconds'),
+    for ax, arr_ga, arr_pso, arr_hyb, title, ylabel in [
+        (axes[0], ga['fit'],  pso['fit'],  hyb['fit'],  'Fitness Distribution',   'Fitness'),
+        (axes[1], ga['cost'], pso['cost'], hyb['cost'], 'Cost Distribution (Rp)', 'Rp'),
+        (axes[2], ga['time'], pso['time'], hyb['time'], 'Time Distribution (s)',  'Seconds'),
     ]:
-        bp = ax.boxplot([arr_ga, arr_pso], labels=['GA', 'PSO'], patch_artist=True)
-        bp['boxes'][0].set_facecolor('#a0a0f0')
-        bp['boxes'][1].set_facecolor('#a0e0a0')
-        ax.plot([1, 2], [np.mean(arr_ga), np.mean(arr_pso)],
+        bp = ax.boxplot([arr_ga, arr_pso, arr_hyb], labels=['GA','PSO','Hybrid'],
+                        patch_artist=True)
+        for box, col in zip(bp['boxes'], colors):
+            box.set_facecolor(col)
+        ax.plot([1,2,3], [np.mean(arr_ga), np.mean(arr_pso), np.mean(arr_hyb)],
                 'ro', ms=8, label='Mean', zorder=5)
         ax.set_title(title, fontsize=12, fontweight='bold', color='#1a1a1a')
         ax.set_ylabel(ylabel, fontsize=10, color='#1a1a1a')
@@ -1014,6 +1398,26 @@ def tab_stats(ga_p, pso_p, seed):
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
     plt.rcdefaults()
+
+    # ── Ranking keseluruhan ──────────────────────────────────────────────────
+    st.markdown('<div class="section-title">🏆 Ranking Keseluruhan</div>', unsafe_allow_html=True)
+    means = {
+        'GA':     {'fit': np.mean(ga['fit']),  'cost': np.mean(ga['cost']),  'time': np.mean(ga['time'])},
+        'PSO':    {'fit': np.mean(pso['fit']), 'cost': np.mean(pso['cost']), 'time': np.mean(pso['time'])},
+        'Hybrid': {'fit': np.mean(hyb['fit']), 'cost': np.mean(hyb['cost']), 'time': np.mean(hyb['time'])},
+    }
+    best_fit  = max(means, key=lambda x: means[x]['fit'])
+    best_cost = min(means, key=lambda x: means[x]['cost'])
+    best_time = min(means, key=lambda x: means[x]['time'])
+    rank_rows = [
+        {'Kategori': '🎯 Fitness Tertinggi (rata-rata)',   'Pemenang': f"🏆 {best_fit}",
+         'Nilai': f"{means[best_fit]['fit']:.5f}"},
+        {'Kategori': '💰 Biaya Terendah (rata-rata)',      'Pemenang': f"🏆 {best_cost}",
+         'Nilai': f"Rp {means[best_cost]['cost']:,.0f}"},
+        {'Kategori': '⚡ Waktu Tercepat (rata-rata)',      'Pemenang': f"🏆 {best_time}",
+         'Nilai': f"{means[best_time]['time']:.2f}s"},
+    ]
+    st.dataframe(pd.DataFrame(rank_rows), use_container_width=True, hide_index=True)
 
 
 # ==============================================================================
@@ -1026,27 +1430,28 @@ def main():
         <div class="sp-header-icon">🥗</div>
         <div class="sp-header-text">
             <h1>Optimasi Menu Makanan</h1>
-            <p>GENETIC ALGORITHM vs PARTICLE SWARM OPTIMIZATION · SMARTPLATE YEAR 2</p>
+            <p>HYBRID GA-PSO · GENETIC ALGORITHM · PARTICLE SWARM OPTIMIZATION · SMARTPLATE YEAR 2</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    ga_p, pso_p, seed = build_sidebar()
+    ga_p, pso_p, hybrid_p, seed = build_sidebar()
 
     tab1, tab2, tab3 = st.tabs([
         "🔬  Optimasi 1 Hari",
         "📅  Menu 7 Hari",
         "📊  Analisis Statistik",
     ])
-    with tab1: tab_single_day(ga_p, pso_p, seed)
-    with tab2: tab_weekly(ga_p, pso_p, seed)
-    with tab3: tab_stats(ga_p, pso_p, seed)
+    with tab1: tab_single_day(ga_p, pso_p, hybrid_p, seed)
+    with tab2: tab_weekly(ga_p, pso_p, hybrid_p, seed)
+    with tab3: tab_stats(ga_p, pso_p, hybrid_p, seed)
 
     st.markdown("""
     <div class="sp-footer">
-        <strong>SmartPlate Year 2</strong> — Optimasi Menu via GA & PSO<br>
-        © 2026 Mochamad Faisal Akbar · Kecerdasan Komputasional<br>
-        <em>Permenkes No. 28/2019 · TKPI 2017 · Holland (1975) · Kennedy & Eberhart (1995)</em>
+        <strong>SmartPlate Year 2</strong> — Optimasi Menu via Hybrid GA-PSO, GA, & PSO<br>
+        © 2026 Mochamad Faisal Akbar · Kecerdasan Komputasional · Universitas Sebelas Maret<br>
+        <em>Permenkes No. 28/2019 · TKPI 2017 · Holland (1975) · Kennedy & Eberhart (1995) ·
+        Kao & Zahara (2008) — Hybrid GA-PSO</em>
     </div>
     """, unsafe_allow_html=True)
 
