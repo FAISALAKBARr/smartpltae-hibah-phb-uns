@@ -81,11 +81,17 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 }
 .sp-footer strong { opacity: 1; }
 
-/* Intro text — pakai --text-color Streamlit, otomatis cerah di dark mode */
+/* Intro text — adaptive light/dark */
 .intro-text {
     font-size: 0.95rem; max-width: 760px; line-height: 1.7;
-    color: var(--text-color);
+    color: #1a1a1a;
 }
+@media (prefers-color-scheme: dark) {
+    .intro-text { color: #e8e8e8; }
+}
+[data-testid="stAppViewContainer"][class*="dark"] .intro-text,
+[data-theme="dark"] .intro-text,
+.stApp[data-theme="dark"] .intro-text { color: #e8e8e8; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,7 +109,7 @@ st.markdown("""
 # ── Intro ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <p class="intro-text">
-SmartPlate adalah platform <em>end-to-end</em> untuk mendukung keseimbangan gizi masyarakat Indonesia.
+SmartPlate adalah platform end-to-end untuk mendukung keseimbangan gizi masyarakat Indonesia.
 Dimulai dari <strong>deteksi dan analisis nutrisi makanan</strong> berbasis foto (Year 1),
 dilanjutkan dengan <strong>optimasi menu harian</strong> menggunakan algoritma komputasional (Year 2).
 Navigasi ke halaman yang diinginkan melalui sidebar di sebelah kiri.
